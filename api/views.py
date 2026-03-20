@@ -1,4 +1,4 @@
-import random, string, qrcode, os
+import random, string, qrcode
 from io import BytesIO
 from django.shortcuts import render, get_object_or_404
 from django.core.mail import EmailMessage, send_mail
@@ -18,8 +18,8 @@ def store_frontend(request, user_slug):
 
 @api_view(['POST'])
 def truthscan_verify(request):
-    """Fixes AttributeError from previous terminal errors"""
-    return Response({"status": "AUDIT_READY"})
+    """Explicitly defined to resolve AttributeError"""
+    return Response({"status": "READY"})
 
 @api_view(['POST'])
 def handle_login(request):
@@ -36,7 +36,7 @@ def send_otp(request):
     email = request.data.get('email')
     otp = str(random.randint(100000, 999999))
     otp_storage[email] = otp
-    send_mail('TruthScan Security', f'Your OTP: {otp}', settings.EMAIL_HOST_USER, [email])
+    send_mail('Coastal Verification', f'Your OTP is: {otp}', settings.EMAIL_HOST_USER, [email])
     return Response({"status": "sent"})
 
 @api_view(['POST'])
@@ -46,15 +46,14 @@ def finalize_order(request):
     qty, total, address = data.get('qty'), data.get('total'), data.get('address')
 
     if otp_storage.get(email) == user_otp:
-        # Generate Unique QR for the Customer/Admin
-        order_data = f"Order ID: {slug}\nQty: {qty}\nTotal: ₹{total}\nAddress: {address}"
-        qr = qrcode.make(order_data)
+        # Generate Unique Order QR
+        order_info = f"ORDER:{slug}\nQTY:{qty}\nTOTAL:INR {total}\nADDR:{address}"
+        qr = qrcode.make(order_info)
         buf = BytesIO()
         qr.save(buf, format="PNG")
         
-        msg = EmailMessage(f"✅ ORDER CONFIRMED: {slug}", f"Details:\n{order_data}", settings.EMAIL_HOST_USER, ['saffar1618web@gmail.com'])
-        msg.attach(f'order_qr_{slug}.png', buf.getvalue(), 'image/png')
+        msg = EmailMessage(f"NEW ORDER: {slug}", order_info, settings.EMAIL_HOST_USER, ['saffar1618web@gmail.com'])
+        msg.attach(f'receipt_{slug}.png', buf.getvalue(), 'image/png')
         msg.send()
-        
         return Response({"status": "success", "order_id": slug})
     return Response({"error": "Invalid OTP"}, status=400)
